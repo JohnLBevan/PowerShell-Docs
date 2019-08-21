@@ -193,6 +193,8 @@ System.DateTime                           System.DateTime
 
 ## NOTES
 
+### Obtaining the output type of a function
+
 The value of the OutputType property of a FunctionInfo object is an array of
 System.Management.Automation.PSTypeName objects, each of which have Name and
 Type properties.
@@ -204,9 +206,74 @@ format.
 (Get-Command Get-Time).OutputType | ForEach {$_.Name}
 ```
 
-The value of the OutputType property can be null. Use a null value when
-the output is a not a .NET type, such as a WMI object or a formatted view
-of an object.
+Note: The returned value may be an empty collection.
+
+```powershell
+(Get-Command Format-List).OutputType.Count
+# returns 0
+```
+
+### Output type is not a .net type
+
+The output type of a function may be something other than a .NET type, such as a WMI object or a
+custom type.  In such cases, the PSTypeName value may be used.
+
+This example shows a WMI management object, including its class information:
+
+```powershell
+function Get-Disk {
+    [CmdletBinding()]
+    [OutputType('System.Management.ManagementObject#root\cimv2\Win32_LogicalDisk')]
+    Param (
+        [Parameter()]
+        [string]$ComputerName = '.'
+        ,
+        [Parameter()]
+        [Alias('Drive')]
+        [string]$DeviceId = 'C:'
+    )
+    Get-WmiObject -Class 'Win32_LogicalDisk' -Namespace 'root/cimv2' -ComputerName $ComputerName -Filter "DeviceId = '$($DeviceId -replace '''', '''''')'"
+}
+```
+
+This example shows a custom type:
+
+```powershell
+function Get-FreeDiskSpace {
+    [CmdletBinding()]
+    [OutputType('Example.FreeDiskSpaceInfo')]
+    Param (
+        [Parameter()]
+        [string]$ComputerName = '.'
+        ,
+        [Parameter()]
+        [Alias('Drive')]
+        [string]$DeviceId = 'C:'
+    )
+    $disk = Get-WmiObject -Class 'Win32_LogicalDisk' -Namespace 'root/cimv2' -ComputerName $ComputerName -Filter "DeviceId = '$($DeviceId -replace '''', '''''')'"
+    ([PSCustomObject][Ordered]@{
+        PSTypeName = 'Example.FreeDiskSpaceInfo'
+        ComputerName = $disk.PSComputerName
+        DeviceId = $disk.DeviceId
+        TotalFreeSpaceInBytes = $disk.FreeSpace 
+        TotalFreeSpaceInMB = $disk.FreeSpace / 1MB
+        TotalFreeSpaceInGB = $disk.FreeSpace / 1GB
+    })
+}
+```
+
+### No Output
+
+Where a function has no output, the recommended practice is to set the output type to Void.
+
+```powershell
+function Invoke-Notepad
+{
+  [OutputType([System.Void])]
+  Param ()
+  & notepad.exe | Out-Null
+}
+```
 
 ## SEE ALSO
 
